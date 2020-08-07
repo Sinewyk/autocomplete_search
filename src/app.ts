@@ -97,8 +97,9 @@ const LIGHT_GREEN = "#8FE8B4";
  *                         between
  * output: ----------c----d-------------h---i--------
  */
-function between(first: Stream<any>, second: Stream<any>) {
-	return (source: Stream<any>) => first.mapTo(source.endWhen(second)).flatten();
+function between<T>(first: Stream<any>, second: Stream<any>) {
+	return (source: Stream<T>): Stream<T> =>
+		first.mapTo(source.endWhen(second)).flatten();
 }
 
 /**
@@ -108,15 +109,26 @@ function between(first: Stream<any>, second: Stream<any>) {
  *                       notBetween
  * output: --a--b-------------e-f--g-----------j-----
  */
-function notBetween(first: Stream<any>, second: Stream<any>) {
-	return (source: Stream<any>) =>
+function notBetween<T>(first: Stream<any>, second: Stream<any>) {
+	return (source: Stream<T>): Stream<T> =>
 		xs.merge(
 			source.endWhen(first),
 			first.map(() => source.compose(dropUntil(second))).flatten()
 		);
 }
 
-function intent(domSource: MainDOMSource, timeSource: TimeSource) {
+interface Actions {
+	search$: Stream<string>;
+	moveHighlight$: Stream<0 | 1 | -1>;
+	setHighlight$: Stream<number>;
+	deleteResult$: Stream<number>;
+	keepFocusOnInput$: Stream<FocusEvent | KeyboardEvent>;
+	selectHighlighted$: Stream<any>;
+	wantsSuggestions$: Stream<boolean>;
+	quitAutocomplete$: Stream<any>;
+}
+
+function intent(domSource: MainDOMSource, timeSource: TimeSource): Actions {
 	const UP_KEYCODE = 38;
 	const DOWN_KEYCODE = 40;
 	const ENTER_KEYCODE = 13;
@@ -159,7 +171,7 @@ function intent(domSource: MainDOMSource, timeSource: TimeSource) {
 		search$: input$
 			.compose(timeSource.debounce(500))
 			.compose(between(inputFocus$, inputBlur$))
-			.map((ev) => ev.target.value)
+			.map((ev) => (ev?.target as HTMLInputElement)?.value)
 			.filter((query) => query.length > 0),
 		moveHighlight$: keydown$
 			.map(({ keyCode }) => {
@@ -191,13 +203,17 @@ function intent(domSource: MainDOMSource, timeSource: TimeSource) {
 	};
 }
 
-function reducers(suggestionsFromResponse$, actions): Stream<Reducer<any>> {
+function reducers(
+	suggestionsFromResponse$: Stream<string[]>,
+	actions: Actions
+): Stream<Reducer<any>> {
 	const moveHighlightReducer$ = actions.moveHighlight$.map(
 		(delta) =>
 			function moveHighlightReducer(state) {
 				const suggestions = state.get("suggestions");
-				const wrapAround = (x) => (x + suggestions.length) % suggestions.length;
-				return state.update("highlighted", (highlighted) => {
+				const wrapAround = (x: number) =>
+					(x + suggestions.length) % suggestions.length;
+				return state.update("highlighted", (highlighted: number | null) => {
 					if (highlighted === null) {
 						return wrapAround(Math.min(delta, 0));
 					} else {
@@ -271,11 +287,17 @@ function reducers(suggestionsFromResponse$, actions): Stream<Reducer<any>> {
 	);
 }
 
-function renderAutocompleteMenu({ suggestions, highlighted }) {
+function renderAutocompleteMenu({
+	suggestions,
+	highlighted,
+}: {
+	suggestions: string[];
+	highlighted: number | null;
+}) {
 	if (suggestions.length === 0) {
 		return ul();
 	}
-	const childStyle = (index) => ({
+	const childStyle = (index: number) => ({
 		...autocompleteItemStyle,
 		...{
 			backgroundColor: highlighted === index ? LIGHT_GREEN : null,
@@ -295,15 +317,23 @@ function renderAutocompleteMenu({ suggestions, highlighted }) {
 	);
 }
 
-function renderComboBox({ suggestions, highlighted, selected }) {
+function renderComboBox({
+	suggestions,
+	highlighted,
+	selected,
+}: {
+	suggestions: string[];
+	highlighted: number | null;
+	selected: number | null;
+}) {
 	return span(".combo-box", { style: comboBoxStyle }, [
 		input(".autocompleteable", {
 			style: autocompleteableStyle,
 			attrs: { type: "text" },
 			hook: {
-				update: (old, { elm }) => {
+				update: (old: unknown, { elm }: { elm: HTMLInputElement }) => {
 					if (selected !== null) {
-						elm.value = selected;
+						elm.value = (selected as unknown) as string;
 					}
 				},
 			},
@@ -348,9 +378,15 @@ const BASE_URL =
 	"https://en.wikipedia.org/w/api.php?action=opensearch&format=json&search=";
 
 const networking = {
-	processResponses(JSONP) {
-		return JSONP.filter((res$) => res$.request.indexOf(BASE_URL) === 0)
+	processResponses(JSONP$: Stream<ResponseStream>): Stream<string[]> {
+		// This is a case a STFU compiler ... but one of these days I should maybe try to understand why even though ResponseStream extends Stream
+		// still: type 'Stream<any>' is not assignable to type 'ResponseStream', should be some covariance bullshit
+		return ((JSONP$ as unknown) as Stream<Stream<any>>)
+			.filter(
+				(res$) => (res$ as ResponseStream).request.indexOf(BASE_URL) === 0
+			)
 			.flatten()
+			.debug()
 			.map((res) => res[1]);
 	},
 
@@ -359,7 +395,7 @@ const networking = {
 	},
 };
 
-function preventedEvents(actions, state$) {
+function preventedEvents(actions: Actions, state$) {
 	return state$
 		.map((state) =>
 			actions.keepFocusOnInput$.map((event) => {
