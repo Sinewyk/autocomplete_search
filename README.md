@@ -17,7 +17,7 @@ I'd like to know if you can work with an existing Cycle.js app to add features, 
 
    ✔️ BONUS POINTS: implement a "delete" button for each entry appended to the list.
 
-   BONUS POINTS: update the dependencies in the codebase.
+   ✔️ BONUS POINTS: update the dependencies in the codebase.
 
    ✔️ BONUS POINTS: use `@cycle/state` for state management.
 
