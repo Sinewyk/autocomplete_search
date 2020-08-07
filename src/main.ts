@@ -1,12 +1,12 @@
-import xs from "xstream";
+import xs, { Stream } from "xstream";
 import { run } from "@cycle/run";
 import { makeDOMDriver } from "@cycle/dom";
-import { makeJSONPDriver } from "@cycle/jsonp";
+import { makeJSONPDriver } from "@cycle/JSONP";
 import { timeDriver } from "@cycle/time";
 import { withState } from "@cycle/state";
 import app from "./app";
 
-function preventDefaultSinkDriver(prevented$) {
+function preventDefaultSinkDriver(prevented$: Stream<any>) {
 	prevented$.addListener({
 		next: (ev) => {
 			ev.preventDefault();

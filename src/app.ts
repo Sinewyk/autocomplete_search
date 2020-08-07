@@ -1,9 +1,29 @@
 import xs, { Stream } from "xstream";
-import { Reducer } from "@cycle/state";
+import { Reducer, StateSource } from "@cycle/state";
 import debounce from "xstream/extra/debounce";
 import dropUntil from "xstream/extra/dropUntil";
-import { ul, li, span, input, div, section, label, button } from "@cycle/dom";
+import {
+	ul,
+	li,
+	span,
+	input,
+	div,
+	section,
+	label,
+	button,
+	MainDOMSource,
+} from "@cycle/dom";
 import { Map as ImmutableMap } from "immutable";
+
+import { TimeSource } from "@cycle/time";
+import { ResponseStream } from "@cycle/JSONP";
+
+type Sources = {
+	DOM: MainDOMSource;
+	state: StateSource<any>;
+	Time: TimeSource;
+	JSONP: Stream<ResponseStream>;
+};
 
 const containerStyle = {
 	background: "#EFEFEF",
@@ -77,8 +97,8 @@ const LIGHT_GREEN = "#8FE8B4";
  *                         between
  * output: ----------c----d-------------h---i--------
  */
-function between(first, second) {
-	return (source) => first.mapTo(source.endWhen(second)).flatten();
+function between(first: Stream<any>, second: Stream<any>) {
+	return (source: Stream<any>) => first.mapTo(source.endWhen(second)).flatten();
 }
 
 /**
@@ -88,21 +108,23 @@ function between(first, second) {
  *                       notBetween
  * output: --a--b-------------e-f--g-----------j-----
  */
-function notBetween(first, second) {
-	return (source) =>
+function notBetween(first: Stream<any>, second: Stream<any>) {
+	return (source: Stream<any>) =>
 		xs.merge(
 			source.endWhen(first),
 			first.map(() => source.compose(dropUntil(second))).flatten()
 		);
 }
 
-function intent(domSource, timeSource) {
+function intent(domSource: MainDOMSource, timeSource: TimeSource) {
 	const UP_KEYCODE = 38;
 	const DOWN_KEYCODE = 40;
 	const ENTER_KEYCODE = 13;
 	const TAB_KEYCODE = 9;
 
-	const input$ = domSource.select(".autocompleteable").events("input");
+	const input$ = (domSource
+		.select(".autocompleteable")
+		.events("input") as unknown) as Stream<InputEvent>;
 	const keydown$ = domSource.select(".autocompleteable").events("keydown");
 	const itemHover$ = domSource
 		.select(".autocomplete-item")
@@ -120,7 +142,9 @@ function intent(domSource, timeSource) {
 		({ keyCode }) => keyCode === ENTER_KEYCODE
 	);
 	const tabPressed$ = keydown$.filter(({ keyCode }) => keyCode === TAB_KEYCODE);
-	const clearField$ = input$.filter((ev) => ev.target.value.length === 0);
+	const clearField$ = input$.filter(
+		(ev) => (ev?.target as HTMLInputElement)?.value.length === 0
+	);
 	const inputBlurToItem$ = inputBlur$.compose(
 		between(itemMouseDown$, itemMouseUp$)
 	);
@@ -149,8 +173,12 @@ function intent(domSource, timeSource) {
 				}
 			})
 			.filter((delta) => delta !== 0),
-		setHighlight$: itemHover$.map((ev) => parseInt(ev.target.dataset.index)),
-		deleteResult$: itemDelete$.map((ev) => parseInt(ev.target.dataset.index)),
+		setHighlight$: itemHover$.map((ev) =>
+			parseInt((ev?.target as any)?.dataset.index)
+		),
+		deleteResult$: itemDelete$.map((ev) =>
+			parseInt((ev?.target as any)?.dataset.index)
+		),
 		keepFocusOnInput$: xs.merge(inputBlurToItem$, enterPressed$, tabPressed$),
 		selectHighlighted$: xs
 			.merge(itemMouseClick$, enterPressed$, tabPressed$)
@@ -349,7 +377,7 @@ function preventedEvents(actions, state$) {
 		.filter((ev) => ev !== null);
 }
 
-export default function app(sources) {
+export default function app(sources: Sources) {
 	const state$ = sources.state.stream;
 
 	const suggestionsFromResponse$ = networking.processResponses(sources.JSONP);
