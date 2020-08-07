@@ -8,6 +8,7 @@
 		"@cycle/dom": "15.0.0-rc.2",
 		"@cycle/jsonp": "7.0.0-rc.1",
 		"@cycle/run": "1.0.0-rc.8",
+		"@cycle/state": "^1.4.0",
 		"@cycle/time": "^0.8.0",
 		"immutable": "^3.7.4",
 		"xstream": "10.2"

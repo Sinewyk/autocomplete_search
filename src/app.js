@@ -156,7 +156,7 @@ function intent(domSource, timeSource) {
 	};
 }
 
-function reducers(actions) {
+function reducers(suggestionsFromResponse$, actions) {
 	const moveHighlightReducer$ = actions.moveHighlight$.map(
 		(delta) =>
 			function moveHighlightReducer(state) {
@@ -187,12 +187,14 @@ function reducers(actions) {
 				function selectHighlightedReducer(state) {
 					const suggestions = state.get("suggestions");
 					const highlighted = state.get("highlighted");
+					const kept = state.get("kept");
 					const hasHighlight = highlighted !== null;
 					const isMenuEmpty = suggestions.length === 0;
 					if (selected && hasHighlight && !isMenuEmpty) {
 						return state
 							.set("selected", suggestions[highlighted])
-							.set("suggestions", []);
+							.set("suggestions", [])
+							.set("kept", [...kept, suggestions[highlighted]]);
 					} else {
 						return state.set("selected", null);
 					}
@@ -205,32 +207,22 @@ function reducers(actions) {
 		return state.set("suggestions", []);
 	});
 
-	return xs.merge(
-		moveHighlightReducer$,
-		setHighlightReducer$,
-		selectHighlightedReducer$,
-		hideReducer$
-	);
-}
-
-function model(suggestionsFromResponse$, actions) {
-	const reducer$ = reducers(actions);
-
-	const state$ = actions.wantsSuggestions$
+	const suggestionsReducer$ = actions.wantsSuggestions$
 		.map((accepted) =>
 			suggestionsFromResponse$.map((suggestions) =>
 				accepted ? suggestions : []
 			)
 		)
 		.flatten()
-		.startWith([])
-		.map((suggestions) =>
-			Immutable.Map({ suggestions, highlighted: null, selected: null })
-		)
-		.map((state) => reducer$.fold((acc, reducer) => reducer(acc), state))
-		.flatten();
+		.map((suggestions) => (state) => state.set("suggestions", suggestions));
 
-	return state$;
+	return xs.merge(
+		moveHighlightReducer$,
+		setHighlightReducer$,
+		selectHighlightedReducer$,
+		hideReducer$,
+		suggestionsReducer$
+	);
 }
 
 function renderAutocompleteMenu({ suggestions, highlighted }) {
@@ -272,19 +264,27 @@ function renderComboBox({ suggestions, highlighted, selected }) {
 	]);
 }
 
+function renderResults({ kept }) {
+	return ul(
+		".results-list",
+		kept.map((result) => li(".result-item", result))
+	);
+}
+
 function view(state$) {
 	return state$.map((state) => {
 		const suggestions = state.get("suggestions");
 		const highlighted = state.get("highlighted");
 		const selected = state.get("selected");
+		const kept = state.get("kept");
 		return div(".container", { style: containerStyle }, [
 			section({ style: sectionStyle }, [
 				label(".search-label", { style: searchLabelStyle }, "Query:"),
 				renderComboBox({ suggestions, highlighted, selected }),
 			]),
 			section({ style: sectionStyle }, [
-				label({ style: searchLabelStyle }, "Some field:"),
-				input({ style: inputTextStyle, attrs: { type: "text" } }),
+				label(".results-label", "Results:"),
+				renderResults({ kept }),
 			]),
 		]);
 	});
@@ -324,15 +324,29 @@ function preventedEvents(actions, state$) {
 }
 
 export default function app(sources) {
+	const state$ = sources.state.stream;
+
 	const suggestionsFromResponse$ = networking.processResponses(sources.JSONP);
 	const actions = intent(sources.DOM, sources.Time);
-	const state$ = model(suggestionsFromResponse$, actions);
+	const reducer$ = reducers(suggestionsFromResponse$, actions);
 	const vtree$ = view(state$);
 	const prevented$ = preventedEvents(actions, state$);
 	const searchRequest$ = networking.generateRequests(actions.search$);
+
 	return {
 		DOM: vtree$,
 		preventDefault: prevented$,
 		JSONP: searchRequest$,
+		state: xs.merge(
+			xs.of(() =>
+				Immutable.Map({
+					suggestions: [],
+					kept: [],
+					highlighted: null,
+					selected: null,
+				})
+			),
+			reducer$
+		),
 	};
 }

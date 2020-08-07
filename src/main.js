@@ -3,6 +3,7 @@ import { run } from "@cycle/run";
 import { makeDOMDriver } from "@cycle/dom";
 import { makeJSONPDriver } from "@cycle/jsonp";
 import { timeDriver } from "@cycle/time";
+import { withState } from "@cycle/state";
 import app from "./app";
 
 function preventDefaultSinkDriver(prevented$) {
@@ -19,7 +20,7 @@ function preventDefaultSinkDriver(prevented$) {
 	return xs.empty();
 }
 
-run(app, {
+run(withState(app), {
 	DOM: makeDOMDriver("#main-container"),
 	JSONP: makeJSONPDriver(),
 	preventDefault: preventDefaultSinkDriver,
