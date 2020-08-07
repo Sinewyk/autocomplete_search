@@ -21,7 +21,7 @@ I'd like to know if you can work with an existing Cycle.js app to add features, 
 
    ✔️ BONUS POINTS: use `@cycle/state` for state management.
 
-   BONUS POINTS: convert from JavaScript to modern TypeScript.
+   ✔️ BONUS POINTS: convert from JavaScript to modern TypeScript. ... kindof ? I allowed implicit any to just compile and check, but it's not "modern", types are missing around ~70 places
 
    BONUS POINTS: improve the UI/UX look and feel of the web app.
 
