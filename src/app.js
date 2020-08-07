@@ -1,7 +1,7 @@
 import xs from "xstream";
 import debounce from "xstream/extra/debounce";
 import dropUntil from "xstream/extra/dropUntil";
-import { ul, li, span, input, div, section, label } from "@cycle/dom";
+import { ul, li, span, input, div, section, label, button } from "@cycle/dom";
 import Immutable from "immutable";
 
 const containerStyle = {
@@ -110,6 +110,8 @@ function intent(domSource, timeSource) {
 	const inputFocus$ = domSource.select(".autocompleteable").events("focus");
 	const inputBlur$ = domSource.select(".autocompleteable").events("blur");
 
+	const itemDelete$ = domSource.select(".result-item-delete").events("mouseup");
+
 	const enterPressed$ = keydown$.filter(
 		({ keyCode }) => keyCode === ENTER_KEYCODE
 	);
@@ -144,6 +146,7 @@ function intent(domSource, timeSource) {
 			})
 			.filter((delta) => delta !== 0),
 		setHighlight$: itemHover$.map((ev) => parseInt(ev.target.dataset.index)),
+		deleteResult$: itemDelete$.map((ev) => parseInt(ev.target.dataset.index)),
 		keepFocusOnInput$: xs.merge(inputBlurToItem$, enterPressed$, tabPressed$),
 		selectHighlighted$: xs
 			.merge(itemMouseClick$, enterPressed$, tabPressed$)
@@ -216,12 +219,23 @@ function reducers(suggestionsFromResponse$, actions) {
 		.flatten()
 		.map((suggestions) => (state) => state.set("suggestions", suggestions));
 
+	const deleteResultReducer$ = actions.deleteResult$.map(
+		(indexToDelete) => (state) => {
+			const kept = state.get("kept");
+			return state.set("kept", [
+				...kept.slice(0, indexToDelete),
+				...kept.slice(indexToDelete + 1),
+			]);
+		}
+	);
+
 	return xs.merge(
 		moveHighlightReducer$,
 		setHighlightReducer$,
 		selectHighlightedReducer$,
 		hideReducer$,
-		suggestionsReducer$
+		suggestionsReducer$,
+		deleteResultReducer$
 	);
 }
 
@@ -267,7 +281,13 @@ function renderComboBox({ suggestions, highlighted, selected }) {
 function renderResults({ kept }) {
 	return ul(
 		".results-list",
-		kept.map((result) => li(".result-item", result))
+		kept.map((result, index) =>
+			li(".result-item", [
+				result,
+				" ",
+				button(".result-item-delete", { attrs: { "data-index": index } }, "❌"),
+			])
+		)
 	);
 }
 
@@ -341,7 +361,9 @@ export default function app(sources) {
 			xs.of(() =>
 				Immutable.Map({
 					suggestions: [],
-					kept: [],
+					// kept: [],
+					// @DEBUG
+					kept: ["Firefox"],
 					highlighted: null,
 					selected: null,
 				})
