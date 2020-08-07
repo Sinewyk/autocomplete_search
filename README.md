@@ -11,15 +11,15 @@ I'd like to know if you can work with an existing Cycle.js app to add features, 
 3. Create a new local git repository for the project
 4. **GOAL: Implement the following feature**
 
-   When the user selects a Wikipedia result from the dropdown menu, **append** that result to a list rendered below the search field.
+   ✔️ When the user selects a Wikipedia result from the dropdown menu, **append** that result to a list rendered below the search field.
 
-   Free-form text **cannot** be appended to the list, only items selected from the dropdown menu can be appended.
+   ✔️ Free-form text **cannot** be appended to the list, only items selected from the dropdown menu can be appended.
 
-   BONUS POINTS: implement a "delete" button for each entry appended to the list.
+   ✔️ BONUS POINTS: implement a "delete" button for each entry appended to the list.
 
    BONUS POINTS: update the dependencies in the codebase.
 
-   BONUS POINTS: use `@cycle/state` for state management.
+   ✔️ BONUS POINTS: use `@cycle/state` for state management.
 
    BONUS POINTS: convert from JavaScript to modern TypeScript.
 
