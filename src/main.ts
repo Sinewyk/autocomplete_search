@@ -20,7 +20,9 @@ function preventDefaultSinkDriver(prevented$) {
 	return xs.empty();
 }
 
-run(withState(app), {
+const wrappedMain = withState(app);
+
+run(wrappedMain, {
 	DOM: makeDOMDriver("#main-container"),
 	JSONP: makeJSONPDriver(),
 	preventDefault: preventDefaultSinkDriver,

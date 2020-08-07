@@ -1,8 +1,9 @@
-import xs from "xstream";
+import xs, { Stream } from "xstream";
+import { Reducer } from "@cycle/state";
 import debounce from "xstream/extra/debounce";
 import dropUntil from "xstream/extra/dropUntil";
 import { ul, li, span, input, div, section, label, button } from "@cycle/dom";
-import Immutable from "immutable";
+import { Map as ImmutableMap } from "immutable";
 
 const containerStyle = {
 	background: "#EFEFEF",
@@ -29,10 +30,13 @@ const inputTextStyle = {
 	padding: "5px",
 };
 
-const autocompleteableStyle = Object.assign({}, inputTextStyle, {
-	width: "100%",
-	boxSizing: "border-box",
-});
+const autocompleteableStyle = {
+	...inputTextStyle,
+	...{
+		width: "100%",
+		boxSizing: "border-box",
+	},
+};
 
 const autocompleteMenuStyle = {
 	position: "absolute",
@@ -159,7 +163,7 @@ function intent(domSource, timeSource) {
 	};
 }
 
-function reducers(suggestionsFromResponse$, actions) {
+function reducers(suggestionsFromResponse$, actions): Stream<Reducer<any>> {
 	const moveHighlightReducer$ = actions.moveHighlight$.map(
 		(delta) =>
 			function moveHighlightReducer(state) {
@@ -243,10 +247,12 @@ function renderAutocompleteMenu({ suggestions, highlighted }) {
 	if (suggestions.length === 0) {
 		return ul();
 	}
-	const childStyle = (index) =>
-		Object.assign({}, autocompleteItemStyle, {
+	const childStyle = (index) => ({
+		...autocompleteItemStyle,
+		...{
 			backgroundColor: highlighted === index ? LIGHT_GREEN : null,
-		});
+		},
+	});
 
 	return ul(
 		".autocomplete-menu",
@@ -358,8 +364,8 @@ export default function app(sources) {
 		preventDefault: prevented$,
 		JSONP: searchRequest$,
 		state: xs.merge(
-			xs.of(() =>
-				Immutable.Map({
+			xs.of<Reducer<any>>(() =>
+				ImmutableMap({
 					suggestions: [],
 					kept: [],
 					highlighted: null,
