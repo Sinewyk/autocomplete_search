@@ -283,9 +283,9 @@ function renderResults({ kept }) {
 		".results-list",
 		kept.map((result, index) =>
 			li(".result-item", [
-				result,
-				" ",
 				button(".result-item-delete", { attrs: { "data-index": index } }, "❌"),
+				" ",
+				result,
 			])
 		)
 	);
@@ -361,9 +361,7 @@ export default function app(sources) {
 			xs.of(() =>
 				Immutable.Map({
 					suggestions: [],
-					// kept: [],
-					// @DEBUG
-					kept: ["Firefox"],
+					kept: [],
 					highlighted: null,
 					selected: null,
 				})
