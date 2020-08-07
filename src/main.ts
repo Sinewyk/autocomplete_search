@@ -11,7 +11,7 @@ function preventDefaultSinkDriver(prevented$: Stream<any>) {
 		next: (ev) => {
 			ev.preventDefault();
 			if (ev.type === "blur") {
-				ev.target.focus();
+				ev?.target?.focus();
 			}
 		},
 		error: () => {},

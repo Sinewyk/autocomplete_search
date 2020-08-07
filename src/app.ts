@@ -1,5 +1,5 @@
 import xs, { Stream } from "xstream";
-import { Reducer, StateSource } from "@cycle/state";
+import { StateSource } from "@cycle/state";
 import debounce from "xstream/extra/debounce";
 import dropUntil from "xstream/extra/dropUntil";
 import {
@@ -18,12 +18,19 @@ import { Map as ImmutableMap } from "immutable";
 import { TimeSource } from "@cycle/time";
 import { ResponseStream } from "@cycle/JSONP";
 
-type Sources = {
+type State = ImmutableMap<string, null | number | string[] | string>;
+
+interface Sources {
 	DOM: MainDOMSource;
-	state: StateSource<any>;
+	state: StateSource<State>;
 	Time: TimeSource;
 	JSONP: Stream<ResponseStream>;
-};
+}
+
+type GenericReducer<T> = (state: T) => T;
+// We initilize our state, so there's no "undefined" ...
+// it would be a pain in the ass to handle it everywhere when we know it's handled
+type MyReducer = GenericReducer<State>;
 
 const containerStyle = {
 	background: "#EFEFEF",
@@ -206,25 +213,25 @@ function intent(domSource: MainDOMSource, timeSource: TimeSource): Actions {
 function reducers(
 	suggestionsFromResponse$: Stream<string[]>,
 	actions: Actions
-): Stream<Reducer<any>> {
+): Stream<MyReducer> {
 	const moveHighlightReducer$ = actions.moveHighlight$.map(
 		(delta) =>
-			function moveHighlightReducer(state) {
-				const suggestions = state.get("suggestions");
+			function moveHighlightReducer(state: State) {
+				const suggestions = state.get("suggestions") as string[];
 				const wrapAround = (x: number) =>
 					(x + suggestions.length) % suggestions.length;
-				return state.update("highlighted", (highlighted: number | null) => {
+				return state.update("highlighted", (highlighted) => {
 					if (highlighted === null) {
 						return wrapAround(Math.min(delta, 0));
 					} else {
-						return wrapAround(highlighted + delta);
+						return wrapAround((highlighted as number) + delta);
 					}
 				});
 			}
 	);
 
 	const setHighlightReducer$ = actions.setHighlight$.map(
-		(highlighted) =>
+		(highlighted): MyReducer =>
 			function setHighlightReducer(state) {
 				return state.set("highlighted", highlighted);
 			}
@@ -235,17 +242,18 @@ function reducers(
 		.flatten()
 		.map(
 			(selected) =>
-				function selectHighlightedReducer(state) {
-					const suggestions = state.get("suggestions");
-					const highlighted = state.get("highlighted");
-					const kept = state.get("kept");
+				function selectHighlightedReducer(state: State) {
+					const suggestions = state.get("suggestions") as string[];
+					const highlighted = state.get("highlighted") as number | null;
+					const kept = state.get("kept") as string[];
+
 					const hasHighlight = highlighted !== null;
 					const isMenuEmpty = suggestions.length === 0;
 					if (selected && hasHighlight && !isMenuEmpty) {
 						return state
-							.set("selected", suggestions[highlighted])
+							.set("selected", suggestions[highlighted as number])
 							.set("suggestions", [])
-							.set("kept", [...kept, suggestions[highlighted]]);
+							.set("kept", [...kept, suggestions[highlighted as number]]);
 					} else {
 						return state.set("selected", null);
 					}
@@ -253,7 +261,7 @@ function reducers(
 		);
 
 	const hideReducer$ = actions.quitAutocomplete$.mapTo(function hideReducer(
-		state
+		state: State
 	) {
 		return state.set("suggestions", []);
 	});
@@ -265,11 +273,13 @@ function reducers(
 			)
 		)
 		.flatten()
-		.map((suggestions) => (state) => state.set("suggestions", suggestions));
+		.map((suggestions) => (state: State) =>
+			state.set("suggestions", suggestions)
+		);
 
 	const deleteResultReducer$ = actions.deleteResult$.map(
-		(indexToDelete) => (state) => {
-			const kept = state.get("kept");
+		(indexToDelete) => (state: State) => {
+			const kept = state.get("kept") as string[];
 			return state.set("kept", [
 				...kept.slice(0, indexToDelete),
 				...kept.slice(indexToDelete + 1),
@@ -342,7 +352,7 @@ function renderComboBox({
 	]);
 }
 
-function renderResults({ kept }) {
+function renderResults({ kept }: { kept: string[] }) {
 	return ul(
 		".results-list",
 		kept.map((result, index) =>
@@ -355,12 +365,12 @@ function renderResults({ kept }) {
 	);
 }
 
-function view(state$) {
+function view(state$: Stream<State>) {
 	return state$.map((state) => {
-		const suggestions = state.get("suggestions");
-		const highlighted = state.get("highlighted");
-		const selected = state.get("selected");
-		const kept = state.get("kept");
+		const suggestions = state.get("suggestions") as string[];
+		const highlighted = state.get("highlighted") as number | null;
+		const selected = state.get("selected") as number | null;
+		const kept = state.get("kept") as string[];
 		return div(".container", { style: containerStyle }, [
 			section({ style: sectionStyle }, [
 				label(".search-label", { style: searchLabelStyle }, "Query:"),
@@ -386,21 +396,20 @@ const networking = {
 				(res$) => (res$ as ResponseStream).request.indexOf(BASE_URL) === 0
 			)
 			.flatten()
-			.debug()
 			.map((res) => res[1]);
 	},
 
-	generateRequests(searchQuery$) {
+	generateRequests(searchQuery$: Stream<string>) {
 		return searchQuery$.map((q) => BASE_URL + encodeURI(q));
 	},
 };
 
-function preventedEvents(actions: Actions, state$) {
+function preventedEvents(actions: Actions, state$: Stream<State>) {
 	return state$
 		.map((state) =>
 			actions.keepFocusOnInput$.map((event) => {
 				if (
-					state.get("suggestions").length > 0 &&
+					(state.get("suggestions") as string[]).length > 0 &&
 					state.get("highlighted") !== null
 				) {
 					return event;
@@ -428,7 +437,7 @@ export default function app(sources: Sources) {
 		preventDefault: prevented$,
 		JSONP: searchRequest$,
 		state: xs.merge(
-			xs.of<Reducer<any>>(() =>
+			xs.of<MyReducer>(() =>
 				ImmutableMap({
 					suggestions: [],
 					kept: [],
